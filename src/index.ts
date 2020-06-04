@@ -1,7 +1,5 @@
 import mongoose from 'mongoose';
-import { app } from './app';
-
-const PORT = 3000;
+import { server } from './app';
 
 mongoose
   .connect('mongodb://127.0.0.1:27017/wallet-exercise', {
@@ -21,4 +19,6 @@ mongoose
 mongoose.set('useCreateIndex', true);
 mongoose.set('useFindAndModify', false);
 
-app.listen(PORT);
+server.listen().then(({ url }) => {
+  console.log(`🚀  Server ready at ${url}`);
+});

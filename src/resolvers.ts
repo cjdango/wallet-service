@@ -1,5 +1,8 @@
 import { Account } from './models';
-import mongoose, { mongo } from 'mongoose';
+import { GraphQLScalarType } from 'graphql';
+import { Kind } from 'graphql/language';
+
+import { paginateResults, fromCursor, toCursor } from './utils';
 
 const getAccountObj = async (id) => {
   const accountDoc = await Account.findById(id);
@@ -22,6 +25,23 @@ const getContextObj = async (parent, context) => {
 };
 
 export default {
+  Binary: new GraphQLScalarType({
+    name: 'Binary',
+    serialize(value) {
+      return toCursor(value);
+    },
+    parseLiteral(ast) {
+      if (ast.kind === Kind.STRING) {
+        return fromCursor(ast.value);
+      } else {
+        return null;
+      }
+    },
+    parseValue(value) {
+      return fromCursor(value);
+    },
+  }),
+
   Account: {
     reservedBalance: async (parent, { context }) => {
       return (await getContextObj(parent, context)).reservedBalance;
@@ -31,17 +51,41 @@ export default {
     },
   },
 
+  AccountsConnectionEdge: {
+    node: (parent) => parent,
+    cursor: (parent) => parent._id,
+  },
+
   Query: {
     account: async (_, { id }) => {
       return getAccountObj(id);
     },
-    // accounts: () =>
-    //   Account.find({
-    //     balance: { $ne: 0 },
-    //     'contexts.reservedBalance': { $ne: 0 },
-    //     'contexts.virtualBalance': { $ne: 0 },
-    //   }),
+    accounts: async (_, { first, after }) => {
+      const allAccounts = await Account.find({
+        balance: { $ne: 0 },
+      });
+
+      allAccounts.reverse();
+
+      const accounts = paginateResults({
+        after,
+        pageSize: first,
+        results: allAccounts,
+      });
+
+      return {
+        totalCount: accounts.length,
+        edges: accounts,
+        pageInfo: {
+          endCursor: accounts.length ? accounts[accounts.length - 1]._id : null,
+          hasNextPage: accounts.length
+            ? accounts[accounts.length - 1]._id !== allAccounts[allAccounts.length - 1]._id
+            : false,
+        },
+      };
+    },
   },
+
   Mutation: {
     updateBalance: async (_, { account, delta }) => {
       if (delta < 0) throw Error('Invalid delta');

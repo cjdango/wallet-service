@@ -3,6 +3,7 @@ import { GraphQLScalarType } from 'graphql';
 import { Kind } from 'graphql/language';
 
 import { paginateResults, fromCursor, toCursor } from './utils';
+import { idempotency } from './models';
 
 const getAccountObj = async (id) => {
   const accountDoc = await Account.findById(id);
@@ -57,10 +58,11 @@ export default {
   },
 
   Query: {
-    account: async (_, { id }) => {
+    account: idempotency(async (_, { id }) => {
       return getAccountObj(id);
-    },
-    accounts: async (_, { first, after }) => {
+    }),
+
+    accounts: idempotency(async (_, { first, after }) => {
       const allAccounts = await Account.find({
         balance: { $ne: 0 },
       });
@@ -83,63 +85,63 @@ export default {
             : false,
         },
       };
-    },
+    }),
   },
 
   Mutation: {
-    updateBalance: async (_, { account, delta }) => {
+    updateBalance: idempotency(async (_, { account, delta }) => {
       if (delta < 0) throw Error('Invalid delta');
       const accountDoc: any = await getAccountObj(account);
       accountDoc.balance = delta;
       accountDoc.save();
       return true;
-    },
-    createReservedBalance: async (_, { account, context, amount }) => {
+    }),
+    createReservedBalance: idempotency(async (_, { account, context, amount }) => {
       const accountDoc: any = await getAccountObj(account);
       const contextObj = await getContextObj(accountDoc, context);
       contextObj.reservedBalance += amount;
       accountDoc.balance -= amount;
       accountDoc.save();
       return true;
-    },
-    updateReservedBalance: async (_, { account, context, delta }) => {
+    }),
+    updateReservedBalance: idempotency(async (_, { account, context, delta }) => {
       if (delta < 0) throw Error('Invalid delta');
       const accountDoc: any = await getAccountObj(account);
       const contextObj = await getContextObj(accountDoc, context);
       contextObj.reservedBalance = delta;
       accountDoc.save();
       return true;
-    },
-    releaseReservedBalance: async (_, { account, context }) => {
+    }),
+    releaseReservedBalance: idempotency(async (_, { account, context }) => {
       const accountDoc: any = await getAccountObj(account);
       const contextObj = await getContextObj(accountDoc, context);
       accountDoc.balance += contextObj.reservedBalance;
       contextObj.reservedBalance = 0;
       accountDoc.save();
       return true;
-    },
-    updateVirtualBalance: async (_, { account, context, delta }) => {
+    }),
+    updateVirtualBalance: idempotency(async (_, { account, context, delta }) => {
       if (delta < 0) throw Error('Invalid delta');
       const accountDoc: any = await getAccountObj(account);
       const contextObj = await getContextObj(accountDoc, context);
       contextObj.virtualBalance = delta;
       accountDoc.save();
       return true;
-    },
-    cancelVirtualBalance: async (_, { account, context }) => {
+    }),
+    cancelVirtualBalance: idempotency(async (_, { account, context }) => {
       const accountDoc: any = await getAccountObj(account);
       const contextObj = await getContextObj(accountDoc, context);
       contextObj.virtualBalance = 0;
       accountDoc.save();
       return true;
-    },
-    commitVirtualBalance: async (_, { account, context }) => {
+    }),
+    commitVirtualBalance: idempotency(async (_, { account, context }) => {
       const accountDoc: any = await getAccountObj(account);
       const contextObj = await getContextObj(accountDoc, context);
       accountDoc.balance += contextObj.virtualBalance;
       contextObj.virtualBalance = 0;
       accountDoc.save();
       return true;
-    },
+    }),
   },
 };

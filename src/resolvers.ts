@@ -14,6 +14,8 @@ const getAccountObj = async (id) => {
 };
 
 const getContextObj = async (parent, context) => {
+  parent = await Account.findById(parent.id);
+
   let contextObj = parent.contexts.find((obj) => obj.name === context);
 
   if (!contextObj) {
@@ -100,8 +102,10 @@ export default {
       const accountDoc: any = await getAccountObj(account);
       const contextObj = await getContextObj(accountDoc, context);
       contextObj.reservedBalance += amount;
+
       accountDoc.balance -= amount;
       accountDoc.save();
+
       return true;
     }),
     updateReservedBalance: idempotency(async (_, { account, context, delta }) => {

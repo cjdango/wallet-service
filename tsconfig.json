@@ -7,10 +7,11 @@
     "target": "es6",
     "sourceMap": true,
     "baseUrl": ".",
+    "experimentalDecorators": true,
     "paths": {
       "*": ["node_modules/*", "src/types/*"]
     }
   },
 
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "tests/**/*"]
 }

@@ -4,27 +4,28 @@ import { Kind } from 'graphql/language';
 
 import { paginateResults, fromCursor, toCursor } from './utils';
 import { idempotency } from './models';
+import mongoose from 'mongoose';
 
-const getAccountObj = async (id) => {
-  const accountDoc = await Account.findById(id);
+const getAccount = async (id) => {
+  const accountDocument = await Account.findById(id);
 
-  if (!accountDoc) return Account.create({});
+  if (!accountDocument) return Account.create({});
 
-  return accountDoc;
+  return accountDocument;
 };
 
-const getContextObj = async (parent, context) => {
+const getContext = async (parent, context) => {
   parent = await Account.findById(parent.id);
 
-  let contextObj = parent.contexts.find((obj) => obj.name === context);
+  let contextDocument = parent.contexts.find((obj) => obj.name === context);
 
-  if (!contextObj) {
-    contextObj = { name: context, reservedBalance: 0, virtualBalance: 0 };
-    parent.contexts.push(contextObj);
+  if (!contextDocument) {
+    contextDocument = { name: context, reservedBalance: 0, virtualBalance: 0 };
+    parent.contexts.push(contextDocument);
     await parent.save();
   }
 
-  return contextObj;
+  return contextDocument;
 };
 
 export default {
@@ -47,10 +48,10 @@ export default {
 
   Account: {
     reservedBalance: async (parent, { context }) => {
-      return (await getContextObj(parent, context)).reservedBalance;
+      return (await getContext(parent, context)).reservedBalance;
     },
     virtualBalance: async (parent, { context }) => {
-      return (await getContextObj(parent, context)).virtualBalance;
+      return (await getContext(parent, context)).virtualBalance;
     },
   },
 
@@ -61,7 +62,7 @@ export default {
 
   Query: {
     account: idempotency(async (_, { id }) => {
-      return getAccountObj(id);
+      return getAccount(id);
     }),
 
     accounts: idempotency(async (_, { first, after }) => {
@@ -93,58 +94,88 @@ export default {
   Mutation: {
     updateBalance: idempotency(async (_, { account, delta }) => {
       if (delta < 0) throw Error('Invalid delta');
-      const accountDoc: any = await getAccountObj(account);
-      accountDoc.balance = delta;
-      accountDoc.save();
+      const accountDocument: any = await getAccount(account);
+      accountDocument.balance = delta;
+      accountDocument.save();
       return true;
     }),
     createReservedBalance: idempotency(async (_, { account, context, amount }) => {
-      const accountDoc: any = await getAccountObj(account);
-      const contextObj = await getContextObj(accountDoc, context);
-      contextObj.reservedBalance += amount;
+      const accountDocument: any = await getAccount(account);
+      const contextDocument = await getContext(accountDocument, context);
 
-      accountDoc.balance -= amount;
-      accountDoc.save();
+      await Account.findOneAndUpdate(
+        { _id: accountDocument.id, 'contexts.name': contextDocument.name },
+        {
+          $inc: {
+            'contexts.$.reservedBalance': amount,
+            balance: -amount,
+          },
+        },
+      );
 
       return true;
     }),
     updateReservedBalance: idempotency(async (_, { account, context, delta }) => {
       if (delta < 0) throw Error('Invalid delta');
-      const accountDoc: any = await getAccountObj(account);
-      const contextObj = await getContextObj(accountDoc, context);
-      contextObj.reservedBalance = delta;
-      accountDoc.save();
+      const accountDocument: any = await getAccount(account);
+      const contextDocument = await getContext(accountDocument, context);
+
+      await Account.findOneAndUpdate(
+        { _id: accountDocument.id, 'contexts.name': contextDocument.name },
+        { $set: { 'contexts.$.reservedBalance': delta } },
+      );
+
       return true;
     }),
     releaseReservedBalance: idempotency(async (_, { account, context }) => {
-      const accountDoc: any = await getAccountObj(account);
-      const contextObj = await getContextObj(accountDoc, context);
-      accountDoc.balance += contextObj.reservedBalance;
-      contextObj.reservedBalance = 0;
-      accountDoc.save();
+      const accountDocument: any = await getAccount(account);
+      const contextDocument = await getContext(accountDocument, context);
+
+      await Account.findOneAndUpdate(
+        { _id: accountDocument.id, 'contexts.name': contextDocument.name },
+        {
+          $inc: { balance: contextDocument.reservedBalance },
+          $set: { 'contexts.$.reservedBalance': 0 },
+        },
+      );
+
       return true;
     }),
     updateVirtualBalance: idempotency(async (_, { account, context, delta }) => {
       if (delta < 0) throw Error('Invalid delta');
-      const accountDoc: any = await getAccountObj(account);
-      const contextObj = await getContextObj(accountDoc, context);
-      contextObj.virtualBalance = delta;
-      accountDoc.save();
+      const accountDocument: any = await getAccount(account);
+      const contextDocument = await getContext(accountDocument, context);
+
+      await Account.findOneAndUpdate(
+        { _id: accountDocument.id, 'contexts.name': contextDocument.name },
+        { $set: { 'contexts.$.virtualBalance': delta } },
+      );
+
       return true;
     }),
     cancelVirtualBalance: idempotency(async (_, { account, context }) => {
-      const accountDoc: any = await getAccountObj(account);
-      const contextObj = await getContextObj(accountDoc, context);
-      contextObj.virtualBalance = 0;
-      accountDoc.save();
+      const accountDocument: any = await getAccount(account);
+      const contextDocument = await getContext(accountDocument, context);
+
+      await Account.findOneAndUpdate(
+        { _id: accountDocument.id, 'contexts.name': contextDocument.name },
+        { $set: { 'contexts.$.virtualBalance': 0 } },
+      );
+
       return true;
     }),
     commitVirtualBalance: idempotency(async (_, { account, context }) => {
-      const accountDoc: any = await getAccountObj(account);
-      const contextObj = await getContextObj(accountDoc, context);
-      accountDoc.balance += contextObj.virtualBalance;
-      contextObj.virtualBalance = 0;
-      accountDoc.save();
+      const accountDocument: any = await getAccount(account);
+      const contextDocument = await getContext(accountDocument, context);
+
+      await Account.findOneAndUpdate(
+        { _id: accountDocument.id, 'contexts.name': contextDocument.name },
+        {
+          $inc: { balance: contextDocument.virtualBalance },
+          $set: { 'contexts.$.virtualBalance': 0 },
+        },
+      );
+
       return true;
     }),
   },

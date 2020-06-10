@@ -13,6 +13,10 @@ export function idempotency(handler) {
     }
 
     if (request && request.result) {
+      if (request.result._id) {
+        request.result['id'] = request.result._id;
+      }
+
       return request.result;
     }
 

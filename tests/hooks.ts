@@ -11,6 +11,7 @@ BeforeAll(async function () {
       useNewUrlParser: true,
       useUnifiedTopology: true,
       useCreateIndex: true,
+      useFindAndModify: false,
       user: 'test',
       pass: 'test',
     })

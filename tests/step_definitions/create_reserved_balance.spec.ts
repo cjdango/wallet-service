@@ -42,6 +42,6 @@ Then('the reserved balance of the given context should be updated', async functi
 });
 
 Then('the given amount should be subtracted to the account balance', async function () {
-  // Write code here that turns the phrase above into concrete actions
-  return 'pending';
+  const updatedAccount: any = await Account.findById(this.accountToUpdate.id);
+  expect(updatedAccount.balance).to.equal(this.accountToUpdate.balance - this.ammountToBeReserved);
 });
